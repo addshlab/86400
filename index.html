@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>dot clock</title>
+	<link rel="manifest" href="manifest.json">
+    <style>
+        body {
+            margin: 0;
+        }
+        #container {
+            display:flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        #info {
+            position: sticky;
+            top: 0;
+            padding: 8px;
+            background-color: rgba(255,255,255,.8);
+            font-weight: bold;
+            font-size: 200%;
+            font-family: monospace;
+            line-height: 1.4em;
+        }
+        #dots {
+            flex-grow: 1;
+            font-family: monospace;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .highlight {
+		    color: #0078D7;
+			font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+<div id="container">
+    <div id="info">
+        <div><span id="dotCount"></span>/86400 <span id="timeRatio"></span></div>
+        <span id="currentTime"></span>
+        <span id="timeZone"></span>
+    </div>
+    <div id="dots"></div>
+    <div id="currentPosition"></div> <!-- ページ内遷移のアンカー -->
+</div>
+<script>
+    const totalSeconds = 86400;
+    const elapsedChar = '.'; // 経過した時間の文字
+    const remainingChar = '#'; // まだ経過していない時間の文字
+    const dotsContainer = document.getElementById('dots');
+    const dotCountElement = document.getElementById('dotCount');
+    const currentTimeElement = document.getElementById('currentTime');
+    const timeZoneElement = document.getElementById('timeZone');
+    const timeRatioElement = document.getElementById('timeRatio');
+    const scrollOffset = 250; // スクロールオフセット
+    let inactivityTimeout; // 非アクティブタイマー
+    const inactivityPeriod = 5000; // 自動スクロールまでの時間
+
+    const colors = [
+'#cc0000','#cc3300','#cc6600','#cc9900',
+'#cccc00','#99cc00','#66cc00','#33cc00',
+'#00cc00','#00cc33','#00cc66','#00cc99',
+'#00cccc','#0099cc','#0066cc','#0033cc',
+'#0000cc','#3300cc','#6600cc','#9900cc',
+'#cc00cc','#cc0099','#cc0066','#cc0033'
+    ];
+
+    // 各時間帯のラベル
+    const hourLabels = [
+        '0HOUR', '1HOUR', '2HOURS', '3HOURS', '4HOURS', '5HOURS', '6HOURS', '7HOURS', '8HOURS', '9HOURS',
+        '10HOURS', '11HOURS', '12HOURS', '13HOURS', '14HOURS', '15HOURS', '16HOURS', '17HOURS', '18HOURS', '19HOURS',
+        '20HOURS', '21HOURS', '22HOURS', '23HOURS'
+    ];
+
+    function getCurrentSeconds() {
+        const now = new Date();
+        const secondsSinceMidnight = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+        return totalSeconds - secondsSinceMidnight;
+    }
+
+    // 初期のドットを表示
+    function displayDots(seconds, elapsedChar, remainingChar) {
+        let dots = '';
+        const currentSeconds = getCurrentSeconds();
+        const currentHours = Math.floor(currentSeconds / 3600);
+        for (let i = 0; i < 24; i++) {
+            let hourSeconds = 3600;
+            let elapsedInHour = totalSeconds - seconds - (i * 3600);
+            let hourDots = '';
+
+            if (elapsedInHour >= 3600) {
+                hourDots = elapsedChar.repeat(hourSeconds);
+            } else if (elapsedInHour > 0) {
+                hourDots = elapsedChar.repeat(elapsedInHour) + remainingChar.repeat(hourSeconds - elapsedInHour);
+            } else {
+                hourDots = remainingChar.repeat(hourSeconds);
+            }
+
+            // ドットに色を適用
+            hourDots = hourDots.split('').map(dot => {
+                // #の場合は青色を適用
+                let color = dot === '#' ? '#333' : colors[i % 24];
+                return `<span style="color: ${color};">${dot}</span>`;
+            }).join('');
+
+            dots += hourDots;
+        }
+        dotsContainer.innerHTML = dots;
+    }
+
+    // UTCからの差異を取得
+    function getUTCDifference() {
+        const now = new Date();
+        const offset = now.getTimezoneOffset();
+        const sign = offset <= 0 ? "+" : "-";
+        const absOffset = Math.abs(offset);
+        const hours = String(Math.floor(absOffset / 60)).padStart(2, '0');
+        const minutes = String(absOffset % 60).padStart(2, '0');
+        return `UTC${sign}${hours}${minutes}`;
+    }
+
+    // 時間表示を更新
+    function updateTime() {
+        const now = new Date();
+        const timeString = now.toLocaleTimeString('en-US', { hour12: false });
+        const utcDifference = getUTCDifference();
+        const currentSeconds = getCurrentSeconds();
+
+        dotCountElement.textContent = `${currentSeconds}`;
+        currentTimeElement.textContent = `${timeString}`;
+        timeZoneElement.textContent = `${utcDifference}`;
+        // 残りの経過時間の割合を小数点以下10桁固定で表示
+        timeRatioElement.textContent = `${(currentSeconds / totalSeconds * 100).toFixed(10)}%`;
+    }
+
+    // 初期表示
+    displayDots(getCurrentSeconds(), elapsedChar, remainingChar);
+    updateTime();
+
+    // 現在のドット位置にスムーズに遷移
+    function smoothScrollToCurrent() {
+        const currentSeconds = getCurrentSeconds();
+        const currentPosition = Math.floor((totalSeconds - currentSeconds) / totalSeconds * dotsContainer.scrollHeight) - scrollOffset;
+        window.scrollTo({
+            top: currentPosition,
+            behavior: 'smooth'
+        });
+    }
+
+    // 非アクティブ時の動作
+    function handleInactivity() {
+        smoothScrollToCurrent();
+    }
+
+    // ユーザーアクティビティの監視
+    function resetInactivityTimeout() {
+        clearTimeout(inactivityTimeout);
+        inactivityTimeout = setTimeout(handleInactivity, inactivityPeriod);
+    }
+
+    // 1秒ごとにドットと時間を更新
+    setInterval(() => {
+        const currentSeconds = getCurrentSeconds();
+        displayDots(currentSeconds, elapsedChar, remainingChar);
+        updateTime();
+    }, 1000);
+
+    // ページロード時にスムーズスクロール
+    window.addEventListener('load', () => {
+        setTimeout(smoothScrollToCurrent, 500); // ページ読み込み後、少し待ってからスクロール
+    });
+
+    // ページの可視性変更時に時間を更新
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            const currentSeconds = getCurrentSeconds();
+            displayDots(currentSeconds, elapsedChar, remainingChar);
+            updateTime();
+            smoothScrollToCurrent();
+        }
+    });
+
+    // ユーザーのアクティビティイベントを監視
+    window.addEventListener('mousemove', resetInactivityTimeout);
+    window.addEventListener('keydown', resetInactivityTimeout);
+    window.addEventListener('scroll', resetInactivityTimeout);
+
+    // 初期の非アクティブタイマー設定
+    resetInactivityTimeout();
+	
+    // サービスワーカーの登録
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('service-worker.js')
+            .then(registration => {
+                console.log('Service Worker registered with scope:', registration.scope);
+            }).catch(error => {
+                console.error('Service Worker registration failed:', error);
+            });
+    }
+</script>
+</body>
+</html>
