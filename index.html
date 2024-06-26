@@ -49,7 +49,7 @@
 <script>
     const totalSeconds = 86400;
     const elapsedChar = '.'; // 経過した時間の文字
-    const remainingChar = '#'; // まだ経過していない時間の文字
+    const remainingChar = '$'; // まだ経過していない時間の文字
     const dotsContainer = document.getElementById('dots');
     const dotCountElement = document.getElementById('dotCount');
     const currentTimeElement = document.getElementById('currentTime');
@@ -89,28 +89,27 @@
         for (let i = 0; i < 24; i++) {
             let hourSeconds = 3600;
             let elapsedInHour = totalSeconds - seconds - (i * 3600);
-            let hourDots = '';
+            let elapsedDots = '';
+            let remainingDots = '';
 
             if (elapsedInHour >= 3600) {
-                hourDots = elapsedChar.repeat(hourSeconds);
+                elapsedDots = elapsedChar.repeat(hourSeconds);
             } else if (elapsedInHour > 0) {
-                hourDots = elapsedChar.repeat(elapsedInHour) + remainingChar.repeat(hourSeconds - elapsedInHour);
+                elapsedDots = elapsedChar.repeat(elapsedInHour);
+                remainingDots = remainingChar.repeat(hourSeconds - elapsedInHour);
             } else {
-                hourDots = remainingChar.repeat(hourSeconds);
+                remainingDots = remainingChar.repeat(hourSeconds);
             }
 
             // ドットに色を適用
-            hourDots = hourDots.split('').map(dot => {
-                // #の場合は青色を適用
-                let color = dot === '#' ? '#333' : colors[i % 24];
-                return `<span style="color: ${color};">${dot}</span>`;
-            }).join('');
+            let color = colors[i % 24]; // #には24色を指定
+            elapsedDots = `<span style="color: #000;">${elapsedDots}</span>`;
+            remainingDots = `<span style="color: ${color};">${remainingDots}</span>`; // .には単色を指定
 
-            dots += hourDots;
+            dots += elapsedDots + remainingDots;
         }
         dotsContainer.innerHTML = dots;
     }
-
     // UTCからの差異を取得
     function getUTCDifference() {
         const now = new Date();
@@ -133,7 +132,7 @@
         currentTimeElement.textContent = `${timeString}`;
         timeZoneElement.textContent = `${utcDifference}`;
         // 残りの経過時間の割合を小数点以下10桁固定で表示
-        timeRatioElement.textContent = `${(currentSeconds / totalSeconds * 100).toFixed(10)}%`;
+        timeRatioElement.textContent = `${(currentSeconds / totalSeconds * 100).toFixed(6)}%`;
     }
 
     // 初期表示
